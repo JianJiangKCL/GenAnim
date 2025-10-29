@@ -47,41 +47,71 @@
 ## 技术栈
 
 - **Python 3.8+**
-- **OpenAI API**：图像生成
-- **WaveSpeed API**：视频动画生成
+- **抽象基类（ABC）**：定义图像和视频生成的标准接口
+- **OpenAI API**：默认图像生成提供商
+- **WaveSpeed API**：默认视频动画生成提供商
 - **python-dotenv**：环境变量管理
 - **requests**：HTTP 请求
+
+## 架构设计原则
+
+为了支持多种 API 提供商，系统采用**接口抽象**设计：
+
+- **可扩展性**：通过抽象基类定义标准接口，轻松切换或添加新的 API 提供商
+- **解耦合**：业务逻辑与具体 API 实现分离
+- **配置化**：通过配置文件选择使用的提供商，无需修改代码
 
 ## 项目结构
 
 ```
 GenAnim/
-├── .env                      # 环境变量配置（不提交到git）
-├── .gitignore               # Git忽略文件
-├── requirements.txt         # Python依赖
+├── .env                           # 环境变量配置（不提交到git）
+├── .gitignore                     # Git忽略文件
+├── requirements.txt               # Python依赖
 ├── config/
-│   └── character_config.json # 角色配置文件
+│   └── character_config.json      # 角色配置文件
 ├── src/
 │   ├── __init__.py
-│   ├── image_generator.py   # OpenAI图像生成模块
-│   ├── video_generator.py   # WaveSpeed视频生成模块
-│   ├── config_loader.py     # 配置加载模块
-│   └── utils.py             # 工具函数
+│   ├── interfaces/                # 接口定义
+│   │   ├── __init__.py
+│   │   ├── image_provider.py      # 图像生成接口（抽象基类）
+│   │   └── video_provider.py      # 视频生成接口（抽象基类）
+│   ├── providers/                 # API 提供商实现
+│   │   ├── __init__.py
+│   │   ├── image/                 # 图像生成提供商
+│   │   │   ├── __init__.py
+│   │   │   ├── openai_provider.py      # OpenAI 实现
+│   │   │   ├── midjourney_provider.py  # Midjourney 实现（示例）
+│   │   │   └── stable_diffusion_provider.py  # Stable Diffusion 实现（示例）
+│   │   └── video/                 # 视频生成提供商
+│   │       ├── __init__.py
+│   │       ├── wavespeed_provider.py    # WaveSpeed 实现
+│   │       ├── runway_provider.py       # Runway 实现（示例）
+│   │       └── pika_provider.py         # Pika 实现（示例）
+│   ├── factory.py                 # 工厂类，根据配置创建提供商实例
+│   ├── config_loader.py           # 配置加载模块
+│   └── utils.py                   # 工具函数
 ├── outputs/
-│   ├── images/              # 生成的图像
-│   └── videos/              # 生成的视频
-└── main.py                  # 主程序入口
+│   ├── images/                    # 生成的图像
+│   └── videos/                    # 生成的视频
+└── main.py                        # 主程序入口
 ```
 
 ## 环境配置
 
 ### .env 文件格式
 ```bash
-# OpenAI API Key
+# 图像生成 API Keys
 OPENAI_API_KEY=your_openai_api_key_here
+MIDJOURNEY_API_KEY=your_midjourney_api_key_here
+STABILITY_API_KEY=your_stability_api_key_here
 
-# WaveSpeed API Key
+# 视频生成 API Keys
 WAVESPEED_API_KEY=your_wavespeed_api_key_here
+RUNWAY_API_KEY=your_runway_api_key_here
+PIKA_API_KEY=your_pika_api_key_here
+
+# 根据配置文件中选择的提供商，只需配置对应的 API Key
 ```
 
 ### .gitignore 配置
@@ -98,6 +128,10 @@ outputs/
 
 ```json
 {
+  "providers": {
+    "image": "openai",
+    "video": "wavespeed"
+  },
   "character": {
     "name": "HooRii",
     "gender": "女",
@@ -126,86 +160,390 @@ outputs/
 }
 ```
 
-## 实现细节
+**providers 字段说明**：
+- `image`: 图像生成提供商，可选值：`openai`, `midjourney`, `stable_diffusion` 等
+- `video`: 视频生成提供商，可选值：`wavespeed`, `runway`, `pika` 等
 
-### 1. 图像生成模块 (image_generator.py)
+## 接口设计
 
-**功能**：
-- 读取角色配置
-- 构建 OpenAI 图像生成提示词
-- 生成正面半身图（无背景PNG）
-- 基于正面图生成侧面图
-- 保存图像到 outputs/images/
+为了支持多种 API 提供商，系统使用抽象基类（ABC）定义统一接口。
 
-**关键提示词构建**：
-```
-基础角色描述 + 外观特征 + 姿势视角 + 图像设置
+### 1. 图像生成接口 (interfaces/image_provider.py)
 
-示例：
-"A 24-year-old anime girl gamer, Japanese 90s semi-thick paint art style,
-black long hair with bangs, narrow eyes with cold gaze, wearing black dress,
-black choker, black cat-ear wireless gaming headset, half-body front view,
-standing pose, white background, high quality, detailed face, 9:16 ratio, PNG format"
-```
-
-**API 调用示例**：
 ```python
-from openai import OpenAI
+from abc import ABC, abstractmethod
+from typing import Dict, Optional
+from dataclasses import dataclass
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+@dataclass
+class ImageGenerationResult:
+    """图像生成结果"""
+    image_url: str          # 图像URL
+    local_path: Optional[str] = None  # 本地保存路径
+    metadata: Optional[Dict] = None   # 元数据（如模型、参数等）
 
-response = client.images.generate(
-    model="dall-e-3",  # 或 gpt-image-1 如果可用
-    prompt=prompt,
-    size="1024x1792",  # 9:16 ratio
-    quality="hd",
-    n=1,
-    response_format="url"
+class ImageProvider(ABC):
+    """图像生成提供商抽象基类"""
+
+    @abstractmethod
+    def generate_image(
+        self,
+        prompt: str,
+        width: int = 1024,
+        height: int = 1792,
+        quality: str = "high",
+        **kwargs
+    ) -> ImageGenerationResult:
+        """
+        生成图像
+
+        Args:
+            prompt: 图像生成提示词
+            width: 图像宽度
+            height: 图像高度
+            quality: 图像质量
+            **kwargs: 其他提供商特定参数
+
+        Returns:
+            ImageGenerationResult: 生成结果
+        """
+        pass
+
+    @abstractmethod
+    def generate_image_from_image(
+        self,
+        prompt: str,
+        reference_image_url: str,
+        width: int = 1024,
+        height: int = 1792,
+        **kwargs
+    ) -> ImageGenerationResult:
+        """
+        基于参考图像生成新图像（图生图）
+
+        Args:
+            prompt: 图像生成提示词
+            reference_image_url: 参考图像URL
+            width: 图像宽度
+            height: 图像高度
+            **kwargs: 其他提供商特定参数
+
+        Returns:
+            ImageGenerationResult: 生成结果
+        """
+        pass
+
+    @abstractmethod
+    def get_provider_name(self) -> str:
+        """获取提供商名称"""
+        pass
+```
+
+### 2. 视频生成接口 (interfaces/video_provider.py)
+
+```python
+from abc import ABC, abstractmethod
+from typing import Dict, Optional
+from dataclasses import dataclass
+
+@dataclass
+class VideoGenerationResult:
+    """视频生成结果"""
+    video_url: str          # 视频URL
+    local_path: Optional[str] = None  # 本地保存路径
+    duration: Optional[float] = None  # 视频时长（秒）
+    metadata: Optional[Dict] = None   # 元数据
+
+class VideoProvider(ABC):
+    """视频生成提供商抽象基类"""
+
+    @abstractmethod
+    def generate_video(
+        self,
+        image_url: str,
+        prompt: str,
+        duration: int = 5,
+        camera_fixed: bool = False,
+        first_frame_url: Optional[str] = None,
+        last_frame_url: Optional[str] = None,
+        **kwargs
+    ) -> VideoGenerationResult:
+        """
+        基于图像生成视频动画
+
+        Args:
+            image_url: 参考图像URL
+            prompt: 动画描述提示词
+            duration: 视频时长（秒）
+            camera_fixed: 是否固定镜头
+            first_frame_url: 首帧图像URL（用于首尾帧控制）
+            last_frame_url: 尾帧图像URL（用于首尾帧控制）
+            **kwargs: 其他提供商特定参数
+
+        Returns:
+            VideoGenerationResult: 生成结果
+        """
+        pass
+
+    @abstractmethod
+    def check_status(self, task_id: str) -> Dict:
+        """
+        检查视频生成任务状态
+
+        Args:
+            task_id: 任务ID
+
+        Returns:
+            Dict: 包含状态信息的字典
+        """
+        pass
+
+    @abstractmethod
+    def get_provider_name(self) -> str:
+        """获取提供商名称"""
+        pass
+```
+
+### 3. 工厂类 (factory.py)
+
+```python
+from typing import Dict
+from src.interfaces.image_provider import ImageProvider
+from src.interfaces.video_provider import VideoProvider
+
+class ProviderFactory:
+    """提供商工厂类"""
+
+    # 注册的图像提供商
+    _image_providers: Dict[str, type] = {}
+
+    # 注册的视频提供商
+    _video_providers: Dict[str, type] = {}
+
+    @classmethod
+    def register_image_provider(cls, name: str, provider_class: type):
+        """注册图像提供商"""
+        cls._image_providers[name] = provider_class
+
+    @classmethod
+    def register_video_provider(cls, name: str, provider_class: type):
+        """注册视频提供商"""
+        cls._video_providers[name] = provider_class
+
+    @classmethod
+    def create_image_provider(cls, name: str, **kwargs) -> ImageProvider:
+        """
+        创建图像提供商实例
+
+        Args:
+            name: 提供商名称
+            **kwargs: 初始化参数
+
+        Returns:
+            ImageProvider: 提供商实例
+        """
+        if name not in cls._image_providers:
+            raise ValueError(f"Unknown image provider: {name}")
+
+        return cls._image_providers[name](**kwargs)
+
+    @classmethod
+    def create_video_provider(cls, name: str, **kwargs) -> VideoProvider:
+        """
+        创建视频提供商实例
+
+        Args:
+            name: 提供商名称
+            **kwargs: 初始化参数
+
+        Returns:
+            VideoProvider: 提供商实例
+        """
+        if name not in cls._video_providers:
+            raise ValueError(f"Unknown video provider: {name}")
+
+        return cls._video_providers[name](**kwargs)
+
+# 注册内置提供商
+from src.providers.image.openai_provider import OpenAIImageProvider
+from src.providers.video.wavespeed_provider import WaveSpeedVideoProvider
+
+ProviderFactory.register_image_provider("openai", OpenAIImageProvider)
+ProviderFactory.register_video_provider("wavespeed", WaveSpeedVideoProvider)
+
+# 添加其他提供商时，在这里注册
+# ProviderFactory.register_image_provider("midjourney", MidjourneyImageProvider)
+# ProviderFactory.register_video_provider("runway", RunwayVideoProvider)
+```
+
+### 4. 使用示例
+
+```python
+from src.factory import ProviderFactory
+from src.config_loader import load_config
+
+# 加载配置
+config = load_config("config/character_config.json")
+
+# 根据配置创建提供商
+image_provider = ProviderFactory.create_image_provider(
+    config["providers"]["image"]
+)
+
+video_provider = ProviderFactory.create_video_provider(
+    config["providers"]["video"]
+)
+
+# 使用提供商生成图像
+result = image_provider.generate_image(
+    prompt="A beautiful anime girl...",
+    width=1024,
+    height=1792
+)
+
+# 使用提供商生成视频
+video_result = video_provider.generate_video(
+    image_url=result.image_url,
+    prompt="Girl gently blinking...",
+    duration=5,
+    camera_fixed=True
 )
 ```
 
-### 2. 视频生成模块 (video_generator.py)
+## 实现细节
 
-**功能**：
-- 使用生成的角色图像作为参考
-- 根据状态类型生成不同的视频动画
-- 确保首尾帧一致性
-- 轮询检查生成状态
-- 下载并保存视频
+### 1. OpenAI 图像提供商实现 (providers/image/openai_provider.py)
 
-**WaveSpeed API 集成参考**：
+```python
+import os
+import requests
+from typing import Optional
+from openai import OpenAI
+from src.interfaces.image_provider import ImageProvider, ImageGenerationResult
+
+class OpenAIImageProvider(ImageProvider):
+    """OpenAI 图像生成提供商"""
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.client = OpenAI(api_key=self.api_key)
+
+    def generate_image(
+        self,
+        prompt: str,
+        width: int = 1024,
+        height: int = 1792,
+        quality: str = "hd",
+        **kwargs
+    ) -> ImageGenerationResult:
+        """生成图像"""
+        # OpenAI DALL-E 3 的尺寸选项有限
+        size = f"{width}x{height}"
+        if size not in ["1024x1024", "1024x1792", "1792x1024"]:
+            size = "1024x1792"  # 默认 9:16
+
+        response = self.client.images.generate(
+            model=kwargs.get("model", "dall-e-3"),
+            prompt=prompt,
+            size=size,
+            quality=quality,
+            n=1,
+            response_format="url"
+        )
+
+        image_url = response.data[0].url
+
+        return ImageGenerationResult(
+            image_url=image_url,
+            metadata={
+                "model": kwargs.get("model", "dall-e-3"),
+                "size": size,
+                "quality": quality
+            }
+        )
+
+    def generate_image_from_image(
+        self,
+        prompt: str,
+        reference_image_url: str,
+        width: int = 1024,
+        height: int = 1792,
+        **kwargs
+    ) -> ImageGenerationResult:
+        """
+        基于参考图像生成新图像
+        注意：OpenAI 的 DALL-E 3 不直接支持图生图
+        这里可以使用 GPT-4 Vision 分析参考图，然后用新提示词生成
+        或者集成其他支持图生图的模型
+        """
+        # 简化实现：将参考图的特征加入提示词
+        enhanced_prompt = f"{prompt}, maintain the style and character from reference"
+
+        return self.generate_image(
+            prompt=enhanced_prompt,
+            width=width,
+            height=height,
+            **kwargs
+        )
+
+    def get_provider_name(self) -> str:
+        return "openai"
+```
+
+**关键提示词构建**：
+```python
+def build_image_prompt(character_config: dict) -> str:
+    """根据角色配置构建图像生成提示词"""
+    char = character_config["character"]
+    img_settings = character_config["image_settings"]
+
+    prompt = f"""
+A {char['age']}-year-old anime {char['gender']} character,
+{char['occupation']}, {char['personality']} personality,
+{img_settings['style']},
+{img_settings['face']},
+{img_settings['hairstyle']},
+wearing {img_settings['clothing']},
+{img_settings['pose']},
+{img_settings['background']},
+{img_settings['image_settings']}
+    """.strip()
+
+    return prompt
+```
+
+### 2. WaveSpeed 视频提供商实现 (providers/video/wavespeed_provider.py)
 
 ```python
 import os
 import requests
 import json
 import time
-from dotenv import load_dotenv
+from typing import Optional, Dict
+from src.interfaces.video_provider import VideoProvider, VideoGenerationResult
 
-load_dotenv()
+class WaveSpeedVideoProvider(VideoProvider):
+    """WaveSpeed 视频生成提供商"""
 
-class VideoGenerator:
-    def __init__(self):
-        self.api_key = os.getenv("WAVESPEED_API_KEY")
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.getenv("WAVESPEED_API_KEY")
         self.base_url = "https://api.wavespeed.ai/api/v3"
         self.headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
 
-    def generate_video(self, image_url, prompt, duration=5, camera_fixed=False):
-        """
-        生成视频动画
-
-        Args:
-            image_url: 参考图像URL（需要是公开可访问的URL）
-            prompt: 动画描述提示词
-            duration: 视频时长（秒）
-            camera_fixed: 是否固定镜头
-
-        Returns:
-            视频URL
-        """
+    def generate_video(
+        self,
+        image_url: str,
+        prompt: str,
+        duration: int = 5,
+        camera_fixed: bool = False,
+        first_frame_url: Optional[str] = None,
+        last_frame_url: Optional[str] = None,
+        **kwargs
+    ) -> VideoGenerationResult:
+        """生成视频动画"""
         url = f"{self.base_url}/bytedance/seedance-v1-pro-i2v-720p"
 
         payload = {
@@ -213,8 +551,14 @@ class VideoGenerator:
             "duration": duration,
             "image": image_url,
             "prompt": prompt,
-            "seed": -1  # -1 表示随机种子
+            "seed": kwargs.get("seed", -1)
         }
+
+        # 如果支持首尾帧控制，添加到 payload
+        if first_frame_url:
+            payload["first_frame"] = first_frame_url
+        if last_frame_url:
+            payload["last_frame"] = last_frame_url
 
         # 提交生成任务
         response = requests.post(url, headers=self.headers, data=json.dumps(payload))
@@ -223,36 +567,40 @@ class VideoGenerator:
             raise Exception(f"Failed to submit task: {response.status_code}, {response.text}")
 
         result = response.json()["data"]
-        request_id = result["id"]
-        print(f"Task submitted. Request ID: {request_id}")
+        task_id = result["id"]
+        print(f"Task submitted. Request ID: {task_id}")
 
         # 轮询检查生成状态
-        return self._poll_result(request_id)
+        video_url = self._poll_result(task_id)
 
-    def _poll_result(self, request_id, poll_interval=2, max_wait_time=300):
-        """
-        轮询检查视频生成结果
+        return VideoGenerationResult(
+            video_url=video_url,
+            duration=duration,
+            metadata={
+                "task_id": task_id,
+                "camera_fixed": camera_fixed,
+                "prompt": prompt
+            }
+        )
 
-        Args:
-            request_id: 任务ID
-            poll_interval: 轮询间隔（秒）
-            max_wait_time: 最大等待时间（秒）
-
-        Returns:
-            视频URL
-        """
-        url = f"{self.base_url}/predictions/{request_id}/result"
+    def check_status(self, task_id: str) -> Dict:
+        """检查任务状态"""
+        url = f"{self.base_url}/predictions/{task_id}/result"
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
+        response = requests.get(url, headers=headers)
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to check status: {response.status_code}, {response.text}")
+
+        return response.json()["data"]
+
+    def _poll_result(self, task_id: str, poll_interval: int = 2, max_wait_time: int = 300) -> str:
+        """轮询检查视频生成结果"""
         start_time = time.time()
 
         while time.time() - start_time < max_wait_time:
-            response = requests.get(url, headers=headers)
-
-            if response.status_code != 200:
-                raise Exception(f"Failed to check status: {response.status_code}, {response.text}")
-
-            result = response.json()["data"]
+            result = self.check_status(task_id)
             status = result["status"]
 
             if status == "completed":
@@ -266,6 +614,9 @@ class VideoGenerator:
                 time.sleep(poll_interval)
 
         raise TimeoutError("Video generation timed out")
+
+    def get_provider_name(self) -> str:
+        return "wavespeed"
 ```
 
 ### 3. 状态视频生成提示词
@@ -531,6 +882,95 @@ python main.py --config config/character_config.json --videos-only
    - 17个视频生成时间较长
    - 建议实现异步并发和进度保存
 
+## 如何添加新的 API 提供商
+
+### 添加图像生成提供商
+
+1. **创建提供商类**：在 `src/providers/image/` 目录下创建新文件，例如 `midjourney_provider.py`
+
+```python
+from typing import Optional
+from src.interfaces.image_provider import ImageProvider, ImageGenerationResult
+
+class MidjourneyImageProvider(ImageProvider):
+    """Midjourney 图像生成提供商"""
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.getenv("MIDJOURNEY_API_KEY")
+        # 初始化 Midjourney API 客户端
+
+    def generate_image(self, prompt: str, width: int = 1024, height: int = 1792, quality: str = "high", **kwargs) -> ImageGenerationResult:
+        # 实现 Midjourney 的图像生成逻辑
+        pass
+
+    def generate_image_from_image(self, prompt: str, reference_image_url: str, width: int = 1024, height: int = 1792, **kwargs) -> ImageGenerationResult:
+        # 实现 Midjourney 的图生图逻辑
+        pass
+
+    def get_provider_name(self) -> str:
+        return "midjourney"
+```
+
+2. **注册提供商**：在 `src/factory.py` 中注册新提供商
+
+```python
+from src.providers.image.midjourney_provider import MidjourneyImageProvider
+
+ProviderFactory.register_image_provider("midjourney", MidjourneyImageProvider)
+```
+
+3. **更新配置**：在配置文件中使用新提供商
+
+```json
+{
+  "providers": {
+    "image": "midjourney",
+    "video": "wavespeed"
+  }
+}
+```
+
+### 添加视频生成提供商
+
+1. **创建提供商类**：在 `src/providers/video/` 目录下创建新文件，例如 `runway_provider.py`
+
+```python
+from typing import Optional, Dict
+from src.interfaces.video_provider import VideoProvider, VideoGenerationResult
+
+class RunwayVideoProvider(VideoProvider):
+    """Runway 视频生成提供商"""
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.getenv("RUNWAY_API_KEY")
+        # 初始化 Runway API 客户端
+
+    def generate_video(self, image_url: str, prompt: str, duration: int = 5, camera_fixed: bool = False, first_frame_url: Optional[str] = None, last_frame_url: Optional[str] = None, **kwargs) -> VideoGenerationResult:
+        # 实现 Runway 的视频生成逻辑
+        pass
+
+    def check_status(self, task_id: str) -> Dict:
+        # 实现任务状态检查
+        pass
+
+    def get_provider_name(self) -> str:
+        return "runway"
+```
+
+2. **注册提供商**：在 `src/factory.py` 中注册
+
+```python
+from src.providers.video.runway_provider import RunwayVideoProvider
+
+ProviderFactory.register_video_provider("runway", RunwayVideoProvider)
+```
+
+3. **添加 API Key**：在 `.env` 文件中添加
+
+```bash
+RUNWAY_API_KEY=your_runway_api_key_here
+```
+
 ## 扩展功能（可选）
 
 1. **多角色支持**：支持批量生成多个角色
@@ -539,6 +979,7 @@ python main.py --config config/character_config.json --videos-only
 4. **版本管理**：保存多个版本便于对比
 5. **自动上传**：集成云存储自动上传
 6. **质量评估**：自动评估生成质量
+7. **提供商对比**：同时使用多个提供商生成，对比选择最佳结果
 
 ## 参考文档
 
@@ -571,3 +1012,8 @@ python main.py --config config/character_config.json --videos-only
 ## 版本记录
 
 - v1.0.0: 初始版本，支持基础图像和视频生成
+- v1.1.0: 添加接口抽象层设计，支持多 API 提供商切换
+  - 定义了 ImageProvider 和 VideoProvider 抽象基类
+  - 实现了 OpenAI 和 WaveSpeed 提供商
+  - 添加工厂模式支持动态创建提供商
+  - 配置文件支持提供商选择
