@@ -1,0 +1,1 @@
+Create a 5s video, first frame has no person, only pure white background, then person peeks from left edge, then walks into frame, facing camera, throughout process person's frame proportion unchanged, person details remain consistent

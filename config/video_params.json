@@ -1,0 +1,34 @@
+{
+  "video_parameters": {
+    "aspect_ratio": "9:16",
+    "resolution": "1080p",
+    "dimensions": {
+      "width": 1088,
+      "height": 1920
+    },
+    "frame_rate": 24,
+    "video_codec": "H.264",
+    "format": "mp4",
+    "color_space": "Rec.709 SDR",
+    "notes": "Do not adjust parameters unless special circumstances, keep consistent with original AI-generated videos"
+  },
+  "generation_settings": {
+    "model": "Seedream V4",
+    "platform": "即梦AI",
+    "fallback_models": ["Gemini Nano Banana"],
+    "post_processing": {
+      "remove_watermark": true,
+      "background_removal": true,
+      "upscale": true
+    }
+  },
+  "state_durations": {
+    "default": 5,
+    "listening": 5,
+    "speaking": 4,
+    "emotion": 5,
+    "transition": 5,
+    "leave": 5,
+    "enter": 5
+  }
+}
