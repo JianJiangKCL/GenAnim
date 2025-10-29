@@ -88,6 +88,28 @@ pip install -e .
 
 ## Quick Start
 
+### Generate ALL Animations from Config (Main Usage)
+
+The primary way to use GenAnim is to provide a character configuration JSON and automatically generate all required animations:
+
+```bash
+# Generate all 17 required video animations
+python src/animation_pipeline.py --character-config config/character_config.json --output-dir output/videos
+
+# Or run the complete example
+python examples/complete_generation.py
+```
+
+This will automatically generate:
+- 3 base state videos (default, listening, speaking)
+- 2 transition videos (default↔listening)
+- 9 emotion videos (happy, shy, surprised, smug, angry, confused, sad, sleepy, neutral)
+- 3 device transition videos (enter, 2x leave)
+
+**Total: 17 videos + 1 reference image**
+
+### Manual Configuration
+
 ### 1. Configure Your Character
 
 Edit `config/character_config.json` to define your character:
@@ -139,19 +161,21 @@ success, error = state_machine.transition_to(
 )
 ```
 
-### 4. Generate Video Prompts
+### 4. Generate All Animations with Pipeline
 
 ```python
-from src.video import PromptGenerator
-from src.state import CharacterState
+from src.animation_pipeline import AnimationPipeline
 
-# Create prompt generator
-prompt_gen = PromptGenerator(profile)
+# Create pipeline
+pipeline = AnimationPipeline(
+    character_config_path="config/character_config.json",
+    video_config_path="config/video_params.json",
+    output_dir="output/videos"
+)
 
-# Generate prompt for a state
-state = CharacterState(StateType.LISTENING)
-prompt = prompt_gen.generate_state_prompt(state)
-print(prompt)
+# Generate ALL required animations
+videos = pipeline.generate_all_animations()
+# Returns dict of 17 videos: {'default': 'output/videos/default.mp4', ...}
 ```
 
 ### 5. Multi-Device Management
