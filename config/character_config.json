@@ -1,0 +1,36 @@
+{
+  "character": {
+    "id": "hoorii_001",
+    "nickname": "HooRii",
+    "gender": "female",
+    "age": 24,
+    "personality": {
+      "traits": ["tsundere", "mischievous", "cute", "clever"],
+      "description": "A gaming-loving esports girl"
+    },
+    "identity": {
+      "occupation": "Esports enthusiast",
+      "hobbies": ["gaming", "staying up late", "online voice chat"]
+    },
+    "background": "Night owl who often stays up late gaming. Likes to voice chat with people but doesn't talk much with strangers. Loves small animals, especially cats.",
+    "special_features": {
+      "accessories": ["black cat-ear wireless gaming headset"],
+      "style": "Prefers black simple clothing and accessories"
+    }
+  },
+  "appearance": {
+    "art_style": "Japanese/90s/anime/semi-thick paint style",
+    "clothing": "Black skirt, wearing black choker, wearing black wireless cat-ear headset",
+    "face": "Narrow eyes, cold gaze with a hint of distant confusion",
+    "hairstyle": "Long black hair to waist, bangs",
+    "pose": "Sitting at computer desk",
+    "scene": "Anime bedroom, relatively retro",
+    "atmosphere": "Mysterious",
+    "image_settings": {
+      "aspect_ratio": "9:16",
+      "quality": "high definition",
+      "face_detail": "high clarity",
+      "detail_carving": true
+    }
+  }
+}

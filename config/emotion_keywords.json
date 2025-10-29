@@ -1,0 +1,50 @@
+{
+  "emotion_triggers": {
+    "happy": {
+      "keywords": ["开心", "高兴", "快乐", "哈哈", "太好了", "棒", "赞", "happy", "great", "awesome", "wonderful"],
+      "weight": 1.0,
+      "description": "Triggers when user expresses happiness or positive emotions"
+    },
+    "shy": {
+      "keywords": ["害羞", "不好意思", "脸红", "羞", "夸", "表扬", "shy", "embarrassed", "blush"],
+      "weight": 1.0,
+      "description": "Triggers when user compliments or makes character feel shy"
+    },
+    "surprised": {
+      "keywords": ["惊讶", "什么", "天啊", "不是吧", "真的吗", "震惊", "wow", "omg", "really", "surprised"],
+      "weight": 1.0,
+      "description": "Triggers when something unexpected happens"
+    },
+    "smug": {
+      "keywords": ["厉害", "强", "自信", "当然", "没问题", "轻松", "confident", "easy", "no problem"],
+      "weight": 1.0,
+      "description": "Triggers when showing confidence or pride"
+    },
+    "angry": {
+      "keywords": ["生气", "气", "烦", "讨厌", "混蛋", "angry", "annoyed", "irritated"],
+      "weight": 1.0,
+      "description": "Triggers when user makes character angry"
+    },
+    "confused": {
+      "keywords": ["困惑", "不懂", "什么意思", "疑惑", "confused", "don't understand", "what do you mean"],
+      "weight": 1.0,
+      "description": "Triggers when character is confused"
+    },
+    "sad": {
+      "keywords": ["难过", "伤心", "悲伤", "哭", "sad", "upset", "hurt", "sorry"],
+      "weight": 1.0,
+      "description": "Triggers when sad emotions are expressed"
+    },
+    "sleepy": {
+      "keywords": ["困", "累", "睡觉", "疲惫", "sleepy", "tired", "exhausted"],
+      "weight": 1.0,
+      "description": "Triggers when tired or sleepy"
+    },
+    "neutral": {
+      "keywords": [],
+      "weight": 0.5,
+      "description": "Default emotion when no specific emotion is triggered"
+    }
+  },
+  "priority_order": ["surprised", "angry", "shy", "happy", "sad", "confused", "sleepy", "smug", "neutral"]
+}
